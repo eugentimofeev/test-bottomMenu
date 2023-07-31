@@ -7,23 +7,6 @@ export const useBottomMenuDragScrollPrevent = (targetRef) => {
   const touchStartPositionXRef = useRef(0);
   const { isMaxSnap } = useContext(BottomMenuContext);
 
-  useEffect(() => {
-    const element = targetRef.current;
-
-    const onTouchStart = (event) => {
-      touchStartPositionYRef.current = event.touches[0].clientY;
-      touchStartPositionXRef.current = event.touches[0].clientX;
-    };
-
-    element?.addEventListener("touchstart", onTouchStart, {
-      passive: false,
-    });
-
-    return () => {
-      element?.removeEventListener("touchstart", onTouchStart);
-    };
-  }, [targetRef]);
-
   //Драг и скролл не работают вместе, поэтому отменяем евент скролла по условию
   useEffect(() => {
     const element = targetRef.current;
@@ -49,10 +32,33 @@ export const useBottomMenuDragScrollPrevent = (targetRef) => {
       passive: false,
     });
 
+    console.log("touchforcechange add");
+    element?.addEventListener("touchforcechange", onTouchMove, {
+      passive: false,
+    });
+
     return () => {
       element?.removeEventListener("touchmove", onTouchMove);
+      element?.removeEventListener("touchforcechange", onTouchMove);
     };
   }, [isMaxSnap, targetRef]);
+
+  useEffect(() => {
+    const element = targetRef.current;
+
+    const onTouchStart = (event) => {
+      touchStartPositionYRef.current = event.touches[0].clientY;
+      touchStartPositionXRef.current = event.touches[0].clientX;
+    };
+
+    element?.addEventListener("touchstart", onTouchStart, {
+      passive: false,
+    });
+
+    return () => {
+      element?.removeEventListener("touchstart", onTouchStart);
+    };
+  }, [targetRef]);
 
   return isMaxSnap;
 };
