@@ -122,4 +122,5 @@
 
   --z-index-modals: 150;
   --z-index-popper: 200;
+  --z-index-bottom-menu: 50;
 }

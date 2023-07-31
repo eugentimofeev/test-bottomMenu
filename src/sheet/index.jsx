@@ -1,16 +1,16 @@
-import React from 'react';
-import { forwardRef, useEffect, useMemo } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo } from "react";
 
 import {
+  AnimatePresence,
   animate,
   motion,
-  useDragControls,
   useMotionValue,
-} from 'framer-motion';
-import { createPortal } from 'react-dom';
+  useMotionValueEvent,
+} from "framer-motion";
 
-import styles from './styles.module.css';
-import useWindowHeight from './useWindowHeight';
+import { SheetPortal } from "./portal";
+import styles from "./styles.module.css";
+import useWindowHeight from "./useWindowHeight";
 
 const getClosestSnap = (goal, snaps) => {
   return snaps.reduce((prev, curr) => {
@@ -20,20 +20,21 @@ const getClosestSnap = (goal, snaps) => {
   });
 };
 
-const Sheet = forwardRef(function Sheet(
+export const Sheet = forwardRef(function Sheet(
   {
     children,
     snapPoints,
     defaultSnap,
-    onDragEvent,
-    onDragEventEnd,
-    onDragEventStart,
+    onDrag,
+    onDragEnd,
+    onDragStart,
+    overlay,
+    onPositionChange,
   },
   ref
 ) {
   const windowHeight = useWindowHeight();
   const y = useMotionValue(0);
-  const dragControls = useDragControls();
   const snaps = useMemo(
     () => snapPoints(windowHeight),
     [snapPoints, windowHeight]
@@ -42,48 +43,79 @@ const Sheet = forwardRef(function Sheet(
   const minSnap = useMemo(() => Math.min(...snaps), [snaps]);
   const defaultSnapValue = useMemo(
     () =>
-      typeof defaultSnap === 'number'
+      typeof defaultSnap === "number"
         ? -defaultSnap
         : -defaultSnap(windowHeight),
     [windowHeight, defaultSnap]
   );
 
-  const dragStyles = {
-    height: maxSnap,
-    bottom: -maxSnap,
-    y,
+  const dragStyles = useMemo(
+    () => ({
+      height: maxSnap,
+      bottom: -maxSnap,
+      y,
+    }),
+    [maxSnap, y]
+  );
+
+  const dragConstraints = useMemo(
+    () => ({
+      top: -maxSnap,
+      bottom: -minSnap,
+    }),
+    [maxSnap, minSnap]
+  );
+
+  const dragInitial = useMemo(
+    () => ({
+      y: defaultSnapValue,
+    }),
+    [defaultSnapValue]
+  );
+
+  const snapTo = useCallback(
+    (to) => {
+      // console.log('snapTo', to);
+
+      if (typeof to === "function") {
+        const span = to(windowHeight);
+
+        animate(y, -span, {});
+
+        return;
+      }
+
+      animate(y, -to, {});
+    },
+    [windowHeight, y]
+  );
+
+  const _onDragStart = (event, data) => {
+    // console.log('_onDragStart');
+
+    if (typeof onDragStart === "function") {
+      onDragStart({ event, data });
+    }
   };
 
-  const dragConstraints = {
-    top: -maxSnap,
-    bottom: -minSnap,
-  };
+  const _onDragEnd = (event, data) => {
+    // console.log('_onDragEnd', event.type);
 
-  const dragInitial = {
-    y: defaultSnapValue,
-  };
+    if (data.velocity.y > 1000) {
+      snapTo(minSnap);
 
-  //todo: change?
-  // const onPointerDown = (event) => {
-  //     dragControls.start(event);
-  // };
-
-  const onDragEnd = (event, { velocity }) => {
-    if (velocity.y > 1000) {
-      animate(y, -minSnap, {});
-
-      if (typeof onDragEventEnd === 'function') {
-        onDragEventEnd({ event, closest: minSnap, snaps });
+      if (typeof onDragEnd === "function") {
+        onDragEnd({ event, closest: minSnap, snaps, data });
       }
 
       return;
     }
 
-    if (velocity.y < -1000) {
-      animate(y, -maxSnap, {});
+    if (data.velocity.y < -1000) {
+      snapTo(maxSnap);
 
-      if (typeof onDragEventEnd === 'function') {
-        onDragEventEnd({ event, closest: maxSnap, snaps });
+      if (typeof onDragEnd === "function") {
+        onDragEnd({ event, closest: maxSnap, snaps, data });
       }
 
       return;
@@ -92,65 +124,73 @@ const Sheet = forwardRef(function Sheet(
     const goal = y.get();
     const closest = getClosestSnap(goal, snaps);
 
-    animate(y, -closest, {});
+    snapTo(closest);
 
-    if (typeof onDragEventEnd === 'function') {
-      onDragEventEnd({ event, closest, snaps });
+    if (typeof onDragEnd === "function") {
+      onDragEnd({ event, closest, snaps, data });
     }
   };
 
-  const onDragStart = (event, data) => {
-    if (typeof onDragEventStart === 'function') {
-      onDragEventStart(event, data);
+  const _onDrag = (event, data) => {
+    const currentY = Math.abs(y.get());
+
+    if (typeof onDrag === "function") {
+      onDrag({ event, data, currentY, snaps });
     }
   };
 
-  const onDrag = (event, data) => {
-    if (typeof onDragEvent === 'function') {
-      onDragEvent(event, data);
-    }
+  const onOverlayClick = () => {
+    snapTo(minSnap);
   };
+
+  useMotionValueEvent(y, "change", (position) => {
+    if (typeof onPositionChange === "function") {
+      onPositionChange({ position: Math.abs(position), snaps });
+    }
+  });
 
   useEffect(() => {
-    const snapTo = (snap) => {
-      if (typeof snap === 'number') {
-        animate(y, -snap, {});
-        return;
-      }
-
-      animate(y, -snap(windowHeight), {});
-    };
-
     ref.current = { snapTo };
-  }, [y, ref, windowHeight]);
+  }, [y, ref, windowHeight, snapTo]);
 
-  return createPortal(
-    <sheet-portal>
-      <div className={styles.container}>
-        <motion.div
-          className={styles.content}
-          drag="y"
-          key={windowHeight}
-          style={dragStyles}
-          onDragEnd={onDragEnd}
-          onDragStart={onDragStart}
-          onDrag={onDrag}
-          dragControls={dragControls}
-          initial={dragInitial}
-          dragConstraints={dragConstraints}
-          // dragListener={false}
-        >
-          <div
-            className={styles.header}
-            // onPointerDown={onPointerDown}
+  return (
+    <SheetPortal>
+      <AnimatePresence>
+        {overlay && (
+          <motion.div
+            className={styles.overlay}
+            onClick={onOverlayClick}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            variants={{
+              visible: { opacity: 1 },
+              hidden: { opacity: 0 },
+            }}
+            transition={{
+              ease: "linear",
+              duration: 0.2,
+            }}
           />
+        )}
+      </AnimatePresence>
 
-          <div className={styles.section}>{children}</div>
-        </motion.div>
-      </div>
-    </sheet-portal>,
-    document.body
+      <motion.div
+        className={styles.content}
+        drag="y"
+        key={windowHeight}
+        style={dragStyles}
+        onDragEnd={_onDragEnd}
+        onDragStart={_onDragStart}
+        onDrag={_onDrag}
+        initial={dragInitial}
+        dragConstraints={dragConstraints}
+        dragDirectionLock
+      >
+        <div className={styles.header} />
+
+        <div className={styles.section}>{children}</div>
+      </motion.div>
+    </SheetPortal>
   );
 });
-
-export default Sheet;
