@@ -3,7 +3,7 @@ import { createContext, useRef, useState } from "react";
 import classNames from "classnames";
 import { useMotionValueEvent, useScroll } from "framer-motion";
 
-import { useBottomMenuDragScrollPrevent } from "./useBottomMenuDragScrollPrevent";
+// import { useBottomMenuDragScrollPrevent } from "./useBottomMenuDragScrollPrevent";
 
 import styles from "./styles.module.css";
 
@@ -23,31 +23,27 @@ export const BottomMenuLayout = ({ children }) => {
   const latestScrollY = useRef(0);
   const [hidden, setHidden] = useState(false);
   const [notTop, setNotTop] = useState(false);
-  const isMaxSnap = useBottomMenuDragScrollPrevent(containerRef);
-  const { scrollY } = useScroll({
-    container: containerRef,
-  });
+  // const isMaxSnap = useBottomMenuDragScrollPrevent(containerRef);
+  // const { scrollY } = useScroll({
+  //   container: containerRef,
+  // });
 
-  useMotionValueEvent(scrollY, "change", (current) => {
-    const last = scrollY.getPrevious();
-    const latest = latestScrollY.current;
-    // из-за динамического добавления эл-ов в контейнер со скролом, направление скрола считаем по двум парам
-    const isDirectionDown = last <= current && latest <= last;
-    const isNotTop = current > scrollHiddenValue;
+  // useMotionValueEvent(scrollY, "change", (current) => {
+  //   const last = scrollY.getPrevious();
+  //   const latest = latestScrollY.current;
+  //   // из-за динамического добавления эл-ов в контейнер со скролом, направление скрола считаем по двум парам
+  //   const isDirectionDown = last <= current && latest <= last;
+  //   const isNotTop = current > scrollHiddenValue;
 
-    setNotTop(isNotTop);
-    setHidden(isNotTop && isDirectionDown);
+  //   setNotTop(isNotTop);
+  //   setHidden(isNotTop && isDirectionDown);
 
-    latestScrollY.current = last;
-  });
+  //   latestScrollY.current = last;
+  // });
 
   return (
-    <BottomMenuLayoutContext.Provider value={containerRef}>
-      <div
-        ref={containerRef}
-        className={styles.content}
-        style={{ overflowY: isMaxSnap ? "scroll" : "hidden" }}
-      >
+    <BottomMenuLayoutContext.Provider value={null}>
+   
         <header className={getHeaderClassName(hidden, notTop)}>
           <div className={styles.search}>search</div>
 
@@ -61,7 +57,7 @@ export const BottomMenuLayout = ({ children }) => {
         </header>
 
         {children}
-      </div>
+ 
     </BottomMenuLayoutContext.Provider>
   );
 };

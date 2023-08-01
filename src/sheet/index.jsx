@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AnimatePresence,
@@ -33,6 +33,7 @@ export const Sheet = forwardRef(function Sheet(
   },
   ref
 ) {
+  const scrollContainerRef = useRef(null)
   const windowHeight = useWindowHeight();
   const y = useMotionValue(0);
   const snaps = useMemo(
@@ -48,6 +49,9 @@ export const Sheet = forwardRef(function Sheet(
         : -defaultSnap(windowHeight),
     [windowHeight, defaultSnap]
   );
+
+  const [currentSnap, setCurrentSnap] = useState(Math.abs(defaultSnapValue));
+  const isMaxSnap = currentSnap === maxSnap
 
   const dragStyles = useMemo(
     () => ({
@@ -75,23 +79,23 @@ export const Sheet = forwardRef(function Sheet(
 
   const snapTo = useCallback(
     (to) => {
-      // console.log('snapTo', to);
-
       if (typeof to === "function") {
         const span = to(windowHeight);
 
         animate(y, -span, {});
+        setCurrentSnap(span)
 
         return;
       }
 
       animate(y, -to, {});
+      setCurrentSnap(to)
     },
     [windowHeight, y]
   );
 
   const _onDragStart = (event, data) => {
-    // console.log('_onDragStart');
+    console.log('_onDragStart');
 
     if (typeof onDragStart === "function") {
       onDragStart({ event, data });
@@ -99,7 +103,7 @@ export const Sheet = forwardRef(function Sheet(
   };
 
   const _onDragEnd = (event, data) => {
-    // console.log('_onDragEnd', event.type);
+    console.log('_onDragEnd', event.type);
 
     if (data.velocity.y > 1000) {
       snapTo(minSnap);
@@ -189,7 +193,13 @@ export const Sheet = forwardRef(function Sheet(
       >
         <div className={styles.header} />
 
-        <div className={styles.section}>{children}</div>
+        <div 
+          className={styles.section}
+          ref={scrollContainerRef}
+          style={{ overflowY: isMaxSnap ? "scroll" : "hidden" }}
+        >
+          {children}
+        </div>
       </motion.div>
     </SheetPortal>
   );
