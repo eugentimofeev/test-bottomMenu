@@ -1,4 +1,11 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   AnimatePresence,
@@ -6,198 +13,55 @@ import {
   motion,
   useMotionValue,
   useMotionValueEvent,
+  useDragControls,
 } from "framer-motion";
 
 import { SheetPortal } from "./portal";
 import styles from "./styles.module.css";
 import useWindowHeight from "./useWindowHeight";
 
-const getClosestSnap = (goal, snaps) => {
-  return snaps.reduce((prev, curr) => {
-    return Math.abs(curr - Math.abs(goal)) < Math.abs(prev - Math.abs(goal))
-      ? curr
-      : prev;
-  });
-};
+const maxSnap = 835; // === 0 translate
+const minSnap = 32; // == ?? translate
 
-export const Sheet = forwardRef(function Sheet(
-  {
-    children,
-    snapPoints,
-    defaultSnap,
-    onDrag,
-    onDragEnd,
-    onDragStart,
-    overlay,
-    onPositionChange,
-  },
-  ref
-) {
-  const scrollContainerRef = useRef(null)
-  const windowHeight = useWindowHeight();
-  const y = useMotionValue(0);
-  const snaps = useMemo(
-    () => snapPoints(windowHeight),
-    [snapPoints, windowHeight]
-  );
-  const maxSnap = useMemo(() => Math.max(...snaps), [snaps]);
-  const minSnap = useMemo(() => Math.min(...snaps), [snaps]);
-  const defaultSnapValue = useMemo(
-    () =>
-      typeof defaultSnap === "number"
-        ? -defaultSnap
-        : -defaultSnap(windowHeight),
-    [windowHeight, defaultSnap]
-  );
+export const Sheet = forwardRef(function Sheet({ children }, ref) {
+  const dragContainerRef = useRef(null);
+  const y = useMotionValue(10);
 
-  const [currentSnap, setCurrentSnap] = useState(Math.abs(defaultSnapValue));
-  const isMaxSnap = currentSnap === maxSnap
+  const initialYRef = useRef(0);
+  const offsetYRef = useRef(0);
+  const currentYRef = useRef(0);
 
-  const dragStyles = useMemo(
-    () => ({
-      height: maxSnap,
-      bottom: -maxSnap,
-      y,
-    }),
-    [maxSnap, y]
-  );
+  //canSroll = true if currentSnap = maxSnap
+  const canSroll = false;
 
-  const dragConstraints = useMemo(
-    () => ({
-      top: -maxSnap,
-      bottom: -minSnap,
-    }),
-    [maxSnap, minSnap]
-  );
-
-  const dragInitial = useMemo(
-    () => ({
-      y: defaultSnapValue,
-    }),
-    [defaultSnapValue]
-  );
-
-  const snapTo = useCallback(
-    (to) => {
-      if (typeof to === "function") {
-        const span = to(windowHeight);
-
-        animate(y, -span, {});
-        setCurrentSnap(span)
-
-        return;
-      }
-
-      animate(y, -to, {});
-      setCurrentSnap(to)
-    },
-    [windowHeight, y]
-  );
-
-  const _onDragStart = (event, data) => {
-    console.log('_onDragStart');
-
-    if (typeof onDragStart === "function") {
-      onDragStart({ event, data });
-    }
+  const onTouchStart = (event) => {
+    initialYRef.current = event.touches[0].clientY - offsetYRef.current;
   };
 
-  const _onDragEnd = (event, data) => {
-    console.log('_onDragEnd', event.type);
-
-    if (data.velocity.y > 1000) {
-      snapTo(minSnap);
-
-      if (typeof onDragEnd === "function") {
-        onDragEnd({ event, closest: minSnap, snaps, data });
-      }
-
-      return;
-    }
-
-    if (data.velocity.y < -1000) {
-      snapTo(maxSnap);
-
-      if (typeof onDragEnd === "function") {
-        onDragEnd({ event, closest: maxSnap, snaps, data });
-      }
-
-      return;
-    }
-
-    const goal = y.get();
-    const closest = getClosestSnap(goal, snaps);
-
-    snapTo(closest);
-
-    if (typeof onDragEnd === "function") {
-      onDragEnd({ event, closest, snaps, data });
-    }
+  const onTouchEnd = () => {
+    initialYRef.current = currentYRef.current;
   };
 
-  const _onDrag = (event, data) => {
-    const currentY = Math.abs(y.get());
+  const onTouchMove = (event) => {
+    currentYRef.current = event.touches[0].clientY - initialYRef.current;
+    offsetYRef.current = currentYRef.current;
 
-    if (typeof onDrag === "function") {
-      onDrag({ event, data, currentY, snaps });
-    }
+    y.set(currentYRef.current);
   };
-
-  const onOverlayClick = () => {
-    snapTo(minSnap);
-  };
-
-  useMotionValueEvent(y, "change", (position) => {
-    if (typeof onPositionChange === "function") {
-      onPositionChange({ position: Math.abs(position), snaps });
-    }
-  });
-
-  useEffect(() => {
-    ref.current = { snapTo };
-  }, [y, ref, windowHeight, snapTo]);
 
   return (
     <SheetPortal>
-      <AnimatePresence>
-        {overlay && (
-          <motion.div
-            className={styles.overlay}
-            onClick={onOverlayClick}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            variants={{
-              visible: { opacity: 1 },
-              hidden: { opacity: 0 },
-            }}
-            transition={{
-              ease: "linear",
-              duration: 0.2,
-            }}
-          />
-        )}
-      </AnimatePresence>
-
       <motion.div
+        ref={dragContainerRef}
         className={styles.content}
-        drag="y"
-        key={windowHeight}
-        style={dragStyles}
-        onDragEnd={_onDragEnd}
-        onDragStart={_onDragStart}
-        onDrag={_onDrag}
-        initial={dragInitial}
-        dragConstraints={dragConstraints}
-        dragDirectionLock
+        style={{ height: 835, y }}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onTouchMove={onTouchMove}
       >
         <div className={styles.header} />
 
-        <div 
-          className={styles.section}
-          ref={scrollContainerRef}
-          style={{ overflowY: isMaxSnap ? "scroll" : "hidden" }}
-        >
+        <div className={styles.section} style={{ overflowY: "hidden" }}>
           {children}
         </div>
       </motion.div>
