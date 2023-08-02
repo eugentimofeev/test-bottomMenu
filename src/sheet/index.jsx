@@ -93,6 +93,7 @@ export const Sheet = ({
           ? tranfromSnapValue(snap(windowHeight, maxSnap))
           : tranfromSnapValue(snap, maxSnap);
 
+      setCurrentSnap(snap);
       offsetYRef.current = transformValue;
       animate(y, transformValue, { duration: 0.2 });
     },
@@ -113,14 +114,12 @@ export const Sheet = ({
     }
 
     if (direction === 1 && speed > maxSpeed) {
-      setCurrentSnap(maxSnap);
       snapTo(maxSnap);
 
       return;
     }
 
     if (direction === -1 && speed > maxSpeed) {
-      setCurrentSnap(minSnap);
       snapTo(minSnap);
 
       return;
@@ -133,7 +132,6 @@ export const Sheet = ({
         ? snaps.at(currentSnapIndex + 1)
         : snaps.at(currentSnapIndex - 1);
 
-    setCurrentSnap(newSnap);
     snapTo(newSnap);
   };
 
