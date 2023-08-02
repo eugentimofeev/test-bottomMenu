@@ -1,11 +1,4 @@
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   AnimatePresence,
@@ -13,15 +6,23 @@ import {
   motion,
   useMotionValue,
   useMotionValueEvent,
-  useDragControls,
+  useScroll,
 } from "framer-motion";
 
 import { SheetPortal } from "./portal";
 import styles from "./styles.module.css";
 import useWindowHeight from "./useWindowHeight";
 
-const snapPoints = (windowHeight) => [88, windowHeight / 2, windowHeight - 32];
-const defaultSnapPoint = 88;
+const maxSpeed = 2;
+const touchMoveDelay = 70;
+const overlayVariants = {
+  visible: { opacity: 1 },
+  hidden: { opacity: 0 },
+};
+const overlayTransition = {
+  ease: "linear",
+  duration: 0.2,
+};
 
 const getSnaps = (snapPoints, windowHeight) => {
   if (typeof snapPoints === "function") {
@@ -39,67 +40,86 @@ const getDefaultSnap = (defaultSnapPoint, windowHeight) => {
   return defaultSnapPoint;
 };
 
-const snapValueToTransformValue = (snapValue, maxSnap) => {
+const getClosestSnap = (snap, snaps) => {
+  return snaps.reduce((prev, curr) => {
+    return Math.abs(curr - Math.abs(snap)) < Math.abs(prev - Math.abs(snap))
+      ? curr
+      : prev;
+  });
+};
+
+const tranfromSnapValue = (snapValue, maxSnap) => {
   return maxSnap - snapValue;
 };
 
-export const Sheet = forwardRef(function Sheet({ children }, ref) {
+export const Sheet = ({
+  snapPoints,
+  defaultSnapPoint,
+  overlay,
+  onPositionChange,
+  setSheetData,
+  children,
+}) => {
   const windowHeight = useWindowHeight();
+
   const snaps = getSnaps(snapPoints, windowHeight);
   const defaultSnap = getDefaultSnap(defaultSnapPoint, windowHeight);
-
   const maxSnap = Math.max(...snaps);
   const minSnap = Math.min(...snaps);
 
-  const defaultTranformValue = snapValueToTransformValue(defaultSnap, maxSnap);
+  const [currentSnap, setCurrentSnap] = useState(defaultSnap);
+  const defaultTranformValue = tranfromSnapValue(defaultSnap, maxSnap);
   const minTransformValue = maxSnap - minSnap;
+  const isMaxSnap = currentSnap === maxSnap;
+
+  const scrollContainerRef = useRef(null);
   const initialYRef = useRef(0);
   const offsetYRef = useRef(defaultTranformValue);
   const currentYRef = useRef(0);
-  const scrollContainerRef = useRef(null);
+  const prevCurrentYRef = useRef(0);
   const blockDragRef = useRef(false);
-
-  const y = useMotionValue(defaultTranformValue);
-
-  console.log("1.5");
-
   const touchStartPosY = useRef(0);
   const touchStartTime = useRef(0);
 
-  const [currentSnap, setCurrentSnap] = useState(defaultSnap);
-  const isMaxSnap = currentSnap === maxSnap;
+  const y = useMotionValue(defaultTranformValue);
+  const { scrollY } = useScroll({
+    container: scrollContainerRef,
+  });
 
-  const snapTo = (snap) => {
-    const transformValue =
-      typeof snap === "function"
-        ? snapValueToTransformValue(snap(windowHeight, maxSnap))
-        : snapValueToTransformValue(snap, maxSnap);
+  const snapTo = useCallback(
+    (snap) => {
+      const transformValue =
+        typeof snap === "function"
+          ? tranfromSnapValue(snap(windowHeight, maxSnap))
+          : tranfromSnapValue(snap, maxSnap);
 
-    offsetYRef.current = transformValue;
-    animate(y, transformValue, { duration: 0.2 });
-  };
+      offsetYRef.current = transformValue;
+      animate(y, transformValue, { duration: 0.2 });
+    },
+    [y, windowHeight, maxSnap]
+  );
 
-  const toNearestSnap = (direction, speed) => {
+  const toNearestSnap = (direction, speed, transformValue, diffY) => {
     const currentSnapIndex = snaps.findIndex((snap) => snap === currentSnap);
 
     if (direction === 1 && currentSnapIndex === snaps.length - 1) {
+      snapTo(maxSnap);
       return;
     }
 
     if (direction === -1 && currentSnapIndex === 0) {
+      snapTo(minSnap);
       return;
     }
 
-    console.log(speed);
-
-    if (direction === 1 && speed > 1.5) {
+    if (direction === 1 && speed > maxSpeed) {
       setCurrentSnap(maxSnap);
       snapTo(maxSnap);
 
       return;
     }
 
-    if (direction === -1 && speed > 1.5) {
+    if (direction === -1 && speed > maxSpeed) {
       setCurrentSnap(minSnap);
       snapTo(minSnap);
 
@@ -107,7 +127,9 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
     }
 
     const newSnap =
-      direction > 0
+      diffY > 200
+        ? getClosestSnap(tranfromSnapValue(transformValue, maxSnap), snaps)
+        : direction > 0
         ? snaps.at(currentSnapIndex + 1)
         : snaps.at(currentSnapIndex - 1);
 
@@ -116,10 +138,6 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
   };
 
   const onTouchStart = (event) => {
-    // if (blockDragRef.current) {
-    //   return;
-    // }
-
     if (scrollContainerRef.current.scrollTop !== 0 && isMaxSnap) {
       blockDragRef.current = true;
       return;
@@ -138,20 +156,21 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
 
     const touchEndTime = new Date().getTime();
     const touchEndPosY = event.changedTouches[0].clientY;
-    const direction = touchStartPosY.current > touchEndPosY ? 1 : -1;
+    const direction = prevCurrentYRef.current > currentYRef.current ? 1 : -1;
+    const diffY = Math.abs(touchStartPosY.current - touchEndPosY);
     const speed =
       Math.abs(touchEndPosY - touchStartPosY.current) /
       (touchEndTime - touchStartTime.current);
 
-    toNearestSnap(direction, speed);
+    toNearestSnap(direction, speed, currentYRef.current, diffY);
 
     initialYRef.current = currentYRef.current;
   };
 
   const onTouchMove = (event) => {
-    const diff = Math.abs(touchStartTime.current - new Date().getTime());
+    const speedDiff = Math.abs(touchStartTime.current - new Date().getTime());
 
-    if (diff < 50) {
+    if (speedDiff < touchMoveDelay) {
       return;
     }
 
@@ -164,6 +183,7 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
       return;
     }
 
+    prevCurrentYRef.current = currentYRef.current;
     currentYRef.current = event.touches[0].clientY - initialYRef.current;
 
     if (currentYRef.current <= 0) {
@@ -194,8 +214,43 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
     blockDragRef.current = true;
   };
 
+  const onOverlayClick = () => {
+    snapTo(minSnap);
+  };
+
+  useMotionValueEvent(y, "change", (transformValue) => {
+    if (typeof onPositionChange === "function") {
+      onPositionChange({
+        transformValue,
+        snapValue: tranfromSnapValue(transformValue, maxSnap),
+        snaps,
+      });
+    }
+  });
+
+  useEffect(() => {
+    setSheetData({
+      snapTo,
+      scrollY,
+    });
+  }, [setSheetData, snapTo, scrollContainerRef, scrollY]);
+
   return (
     <SheetPortal>
+      <AnimatePresence>
+        {overlay && (
+          <motion.div
+            className={styles.overlay}
+            onClick={onOverlayClick}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            variants={overlayVariants}
+            transition={overlayTransition}
+          />
+        )}
+      </AnimatePresence>
+
       <motion.div
         className={styles.content}
         style={{ height: maxSnap, y }}
@@ -216,4 +271,4 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
       </motion.div>
     </SheetPortal>
   );
-});
+};

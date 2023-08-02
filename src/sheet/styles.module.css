@@ -28,19 +28,6 @@
   --header-height: 12px;
 }
 
-/* .content:before {
-  content: "";
-  height: 1px;
-  background-color: var(--color-steel-50);
-  display: block;
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  transform-origin: top;
-  transform: scaleY(100);
-} */
-
 .header {
   position: relative;
   width: 100%;

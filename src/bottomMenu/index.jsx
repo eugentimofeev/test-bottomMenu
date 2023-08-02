@@ -5,16 +5,9 @@ import { HomeBottomMenu } from "../homeBottomMenu";
 import { BottomMenuLayout } from "../bottomMenuLayout";
 import { TopMenu } from "../topMenu";
 
-const minSnap = 88;
-const maxSnap = 32;
-
-const getSnapPoints = (maxHeight) => [
-  minSnap,
-  maxHeight / 2.866,
-  maxHeight - maxSnap,
-];
-
-const getMaxSnap = (maxHeight) => maxHeight - maxSnap;
+const snapPoints = (windowHeight) => [88, windowHeight / 2, windowHeight - 32];
+const defaultSnapPoint = 88;
+const getMaxSnap = (windowHeight) => windowHeight - 32;
 
 export const BottomMenuContext = createContext();
 
@@ -22,6 +15,8 @@ export const BottomMenu = () => {
   const bottomSheetRef = useRef(null);
   const [isMaxSnap, setIsMaxSnap] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  const [sheetData, setSheetData] = useState({});
 
   const onDragStart = useCallback(() => {
     setIsDragging(true);
@@ -35,10 +30,10 @@ export const BottomMenu = () => {
     bottomSheetRef.current?.snapTo(getMaxSnap);
   };
 
-  const onPositionChange = ({ position, snaps }) => {
+  const onPositionChange = ({ snapValue, snaps }) => {
     const maxSnap = Math.max(...snaps);
 
-    if (position + 100 >= maxSnap) {
+    if (snapValue + 100 >= maxSnap) {
       setIsMaxSnap(true);
     } else {
       setIsMaxSnap(false);
@@ -49,22 +44,21 @@ export const BottomMenu = () => {
     isMaxSnap,
     isDragging,
     snapToMax,
+    ...sheetData,
   };
 
   return (
     <BottomMenuContext.Provider value={contextValue}>
       <Sheet
-        ref={bottomSheetRef}
-        snapPoints={getSnapPoints}
-        defaultSnap={minSnap}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
+        snapPoints={snapPoints}
+        defaultSnapPoint={defaultSnapPoint}
         overlay={isMaxSnap}
         onPositionChange={onPositionChange}
+        setSheetData={setSheetData}
       >
         <TopMenu hidden={isMaxSnap} />
 
-        <BottomMenuLayout>
+        <BottomMenuLayout sheetData={sheetData}>
           <HomeBottomMenu />
         </BottomMenuLayout>
       </Sheet>
