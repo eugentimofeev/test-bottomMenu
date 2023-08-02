@@ -61,6 +61,8 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
 
   const y = useMotionValue(defaultTranformValue);
 
+  console.log("1.5");
+
   const touchStartPosY = useRef(0);
   const touchStartTime = useRef(0);
 
@@ -88,14 +90,16 @@ export const Sheet = forwardRef(function Sheet({ children }, ref) {
       return;
     }
 
-    if (direction === 1 && speed > 0.9) {
+    console.log(speed);
+
+    if (direction === 1 && speed > 1.5) {
       setCurrentSnap(maxSnap);
       snapTo(maxSnap);
 
       return;
     }
 
-    if (direction === -1 && speed > 0.9) {
+    if (direction === -1 && speed > 1.5) {
       setCurrentSnap(minSnap);
       snapTo(minSnap);
 
